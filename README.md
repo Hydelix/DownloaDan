@@ -31,8 +31,8 @@ Imports are rejected if they contain anything else, exceed 8 KB, or have unreada
 Adaptive/DRM streams (YouTube, Netflix, HLS/DASH playlists) are not supported; only direct files.
 
 ## Releasing an update (GitHub)
-One-time: make a PUBLIC repo for releases only (e.g. `downloadan-releases`), and put your GitHub username in
-`package.json` -> `build.publish.owner`.
+Releases are published on this same (public) repo: `package.json` -> `build.publish` points at `Hydelix/DownloaDan`.
+The repo must stay public, otherwise installed copies can't check for updates without a token.
 
 Every release:
 1. Raise `"version"` in `package.json` (1.0.0 -> 1.0.1). It must always go up.
