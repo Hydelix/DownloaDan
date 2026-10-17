@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" data-density="comfortable" data-font="system">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Connect browser</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="titlebar"><div class="brand"><span class="logo"></span><b>Connect browser</b></div></header>
+<main class="prompt pair">
+  <h2>Connect your browser?</h2>
+  <p>The DownloaDan extension in <b id="pqBrowser"></b> wants to connect to this app. Once connected, it can send downloads to DownloaDan.</p>
+  <dl class="info"><dt>Extension</dt><dd id="pqExt"></dd><dt>Time left</dt><dd id="pqLeft"></dd></dl>
+  <p class="muted small">Only click <b>Allow</b> if you just installed the extension or pressed <b>Connect</b> in its settings. If you did not, click <b>Deny</b>.</p>
+  <div class="actions"><button id="pqDeny" class="btn" type="button">Deny</button><button id="pqAllow" class="btn primary" type="button">Allow</button></div>
+</main>
+<script src="pair.js"></script>
+</body>
+</html>

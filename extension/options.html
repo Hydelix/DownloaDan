@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>DownloaDan Integration</title>
+<style>
+ body{font:14px/1.5 system-ui,"Segoe UI",sans-serif;background:#0e1014;color:#e7e9ee;margin:0;display:grid;place-items:center;min-height:100vh}
+ main{width:min(540px,92vw);background:#161920;border:1px solid #2a2f3a;border-radius:16px;padding:26px}
+ h1{font-size:18px;margin:0 0 16px} .muted{color:#8b92a3}
+ .status{display:flex;gap:12px;align-items:flex-start;background:#0e1014;border:1px solid #2a2f3a;border-radius:12px;padding:14px 16px;margin-bottom:14px}
+ .dot{width:12px;height:12px;border-radius:50%;margin-top:5px;flex:none;background:#8b92a3}
+ .dot.ok{background:#3ecf8e}.dot.warn{background:#f5a524}.dot.err{background:#ff5d6c}.dot.busy{background:#4f8cff;animation:pulse 1s infinite}
+ @keyframes pulse{50%{opacity:.35}}
+ #sTitle{display:block}#sDetail{display:block;margin-top:2px}
+ label.field{display:block;color:#8b92a3;font-size:12px;margin:12px 0 5px}
+ input[type=text],input[type=password],input[type=number]{width:100%;box-sizing:border-box;background:#0e1014;border:1px solid #2a2f3a;border-radius:8px;padding:9px 11px;color:inherit;font:inherit}
+ button{margin-top:10px;margin-right:8px;background:#4f8cff;border:0;color:#fff;font-weight:600;padding:9px 16px;border-radius:8px;cursor:pointer}
+ button.alt{background:#1e222b;border:1px solid #2a2f3a;font-weight:400}
+ button:disabled{opacity:.5;cursor:default}
+ .check{display:flex;gap:8px;align-items:center;margin:18px 0 6px}.check input{width:auto}
+ details{margin-top:14px;color:#8b92a3}summary{cursor:pointer}
+ #msg{margin-top:10px;min-height:20px}
+ [hidden]{display:none!important}
+</style></head>
+<body><main>
+ <h1>DownloaDan Integration</h1>
+ <div class="status"><span id="dot" class="dot busy"></span><div><b id="sTitle">Looking for DownloaDan…</b><span id="sDetail" class="muted"></span></div></div>
+ <button id="btnMain" hidden>Connect</button><button id="btnDisconnect" class="alt" hidden>Disconnect</button>
+ <label class="check"><input id="capture" type="checkbox"> Send normal browser downloads to DownloaDan</label>
+ <details><summary>Advanced: pair manually</summary>
+  <p class="muted">Normally you do not need this. Copy the token from DownloaDan → Settings → Browser.</p>
+  <label class="field" for="token">Pairing token</label><input id="token" type="password" autocomplete="off" spellcheck="false">
+  <label class="field" for="port">Port (leave as is unless DownloaDan says otherwise)</label><input id="port" type="number" min="1024" max="65535" placeholder="18642">
+  <button id="save">Save and test</button><div id="msg"></div>
+ </details>
+</main>
+<script src="bridge-client.js"></script>
+<script src="options.js"></script>
+</body></html>

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" data-density="comfortable" data-font="system">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>New download</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="titlebar"><div class="brand"><span class="logo"></span><b>New download</b></div><span class="spacer"></span><span id="pWait" class="muted small"></span></header>
+<main class="prompt">
+  <section class="info-card">
+    <label class="field"><span>File name</span><input id="pName" type="text" spellcheck="false"></label>
+    <dl class="info">
+      <dt>Size</dt><dd id="pSize">Checking…</dd>
+      <dt>Type</dt><dd id="pType">Checking…</dd>
+      <dt>From</dt><dd id="pHost"></dd>
+      <dt>Resume</dt><dd id="pResume">Checking…</dd>
+    </dl>
+  </section>
+  <label class="field"><span>Save to</span><div class="inline"><input id="pDir" type="text" readonly><button id="pBrowse" class="btn" type="button">Browse…</button></div></label>
+  <p id="pSpace" class="muted small"></p>
+  <label class="field"><span>Queue</span><select id="pQueue"></select></label>
+  <label class="check"><input id="pStart" type="checkbox" checked> Start this queue now</label>
+  <p class="hint">Untick to just add the file; it waits in the queue until you press ▶ on that queue.</p>
+  <p id="pNote" class="err" hidden></p>
+  <div class="actions"><button id="pCancel" class="btn" type="button">Cancel</button><button id="pGo" class="btn primary" type="button">Download</button></div>
+</main>
+<script src="prompt.js"></script>
+</body>
+</html>

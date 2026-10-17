@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en" data-density="comfortable" data-font="system">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>DownloaDan</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="titlebar">
+  <div class="brand"><span class="logo"></span><b>DownloaDan</b></div>
+  <input id="search" class="search" type="search" placeholder="Search downloads" autocomplete="off">
+</header>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="side-head"><span>Queues</span><button id="btnNewQueue" class="icon-btn" title="New queue">+</button></div>
+    <nav id="queueList" class="queue-list"></nav>
+    <div class="side-foot">
+      <div id="updateBar" class="updbar" hidden><span id="updBarText"></span><button id="updBarBtn" class="btn primary" type="button"></button></div>
+      <button id="btnSettings" class="side-btn">Settings</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="toolbar">
+      <button id="btnAdd" class="btn primary">+ Add URL</button>
+      <button id="btnResume" class="btn">Resume</button>
+      <button id="btnPause" class="btn">Pause</button>
+      <button id="btnRemove" class="btn danger">Remove</button>
+      <span class="spacer"></span>
+      <div class="stepper" title="How many downloads run at the same time">
+        <span>Simultaneous</span>
+        <button id="parMinus" class="icon-btn" aria-label="Fewer">−</button>
+        <b id="parValue">3</b>
+        <button id="parPlus" class="icon-btn" aria-label="More">+</button>
+      </div>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button data-f="all" class="active">All</button>
+      <button data-f="active">Active</button>
+      <button data-f="completed">Completed</button>
+      <button data-f="error">Failed</button>
+      <span class="spacer"></span>
+      <button id="btnSort" class="link" title="Choose the order of the list"></button>
+      <button id="btnClear" class="clear-btn" title="Remove all finished downloads from the list (the files stay on your disk)">Clear all completed</button>
+    </div>
+
+    <div class="table" id="table">
+      <div class="cols" id="cols">
+        <span></span>
+        <button type="button" class="hcell" data-col="name" title="Click to sort, drag the edge to resize"><span class="lbl">Name</span><i class="arrow"></i><i class="grip" title="Drag to resize, double-click to reset"></i></button>
+        <button type="button" class="hcell" data-col="prog" title="Click to sort, drag the edge to resize"><span class="lbl">Progress</span><i class="arrow"></i><i class="grip" title="Drag to resize, double-click to reset"></i></button>
+        <button type="button" class="hcell" data-col="speed" title="Click to sort, drag the edge to resize"><span class="lbl">Speed</span><i class="arrow"></i><i class="grip" title="Drag to resize, double-click to reset"></i></button>
+        <button type="button" class="hcell" data-col="eta" title="Click to sort, drag the edge to resize"><span class="lbl">ETA</span><i class="arrow"></i><i class="grip" title="Drag to resize, double-click to reset"></i></button>
+        <button type="button" class="hcell" data-col="status" title="Click to sort, drag the edge to resize"><span class="lbl">Status</span><i class="arrow"></i><i class="grip" title="Drag to resize, double-click to reset"></i></button>
+      </div>
+      <div id="list" class="list"></div>
+    </div>
+    <div id="empty" class="empty" hidden>
+      <div class="empty-art"></div>
+      <p><b>No downloads here yet</b></p>
+      <p class="muted">Click <b>Add URL</b>, press Ctrl+N, or use the browser extension.</p>
+    </div>
+
+    <footer class="statusbar">
+      <span id="stSpeed">0 B/s</span><span id="stCount">0 active</span><span class="spacer"></span><span id="stBridge"></span>
+    </footer>
+  </main>
+</div>
+
+<div id="ctx" class="ctx" hidden></div>
+<div id="sortMenu" class="ctx" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<dialog id="dlgAdd">
+  <h2>Add download</h2>
+  <label class="field"><span>URLs (one per line)</span><textarea id="addUrls" rows="4" placeholder="https://example.com/file.zip" spellcheck="false"></textarea></label>
+  <label class="field"><span>File name <i class="muted">(optional, single URL only)</i></span><input id="addName" type="text" spellcheck="false"></label>
+  <div class="row2">
+    <label class="field"><span>Queue</span><select id="addQueue"></select></label>
+    <label class="field"><span>Save to</span>
+      <div class="inline"><input id="addDir" type="text" readonly><button id="addBrowse" class="btn" type="button">Browse…</button></div></label>
+  </div>
+  <details><summary>Advanced</summary>
+    <label class="field"><span>Referer <i class="muted">(some sites require it)</i></span><input id="addRef" type="text" spellcheck="false"></label>
+  </details>
+  <p id="addErr" class="err" hidden></p>
+  <div class="actions">
+    <button id="addCancel" class="btn" type="button">Cancel</button>
+    <button id="addQueued" class="btn" type="button">Add to queue</button>
+    <button id="addNow" class="btn primary" type="button">Download now</button>
+  </div>
+</dialog>
+
+<dialog id="dlgRemove">
+  <h2 id="rmTitle">Remove download</h2>
+  <p id="rmText"></p>
+  <ul id="rmList" class="rm-list"></ul>
+  <label class="check" id="rmDeleteRow"><input id="rmDelete" type="checkbox"> <span id="rmDeleteLabel">Also delete the file from disk</span></label>
+  <p class="hint" id="rmHint">The file is moved to the Recycle Bin, so you can still restore it.</p>
+  <p id="rmNote" class="muted small"></p>
+  <div class="actions"><button id="rmCancel" class="btn" type="button">Cancel</button><button id="rmOk" class="btn danger strong" type="button">Remove</button></div>
+</dialog>
+
+<dialog id="dlgRefresh">
+  <h2>Refresh download address</h2>
+  <section id="rfWait">
+    <p class="muted">DownloaDan is waiting for a download from your browser. Open the page this file came from and start the download again. DownloaDan will catch it and carry on from where it stopped.</p>
+    <dl class="info"><dt>File</dt><dd id="rfName"></dd><dt>Done</dt><dd id="rfDone"></dd></dl>
+    <label class="field"><span>Or paste the new link</span><div class="inline"><input id="rfUrl" type="text" spellcheck="false" placeholder="https://…"><button id="rfUse" class="btn" type="button">Use this link</button></div></label>
+    <p id="rfMsg" class="muted small"></p>
+  </section>
+  <section id="rfConfirm" hidden>
+    <p><b>This does not look like the same file.</b></p>
+    <ul id="rfReasons" class="reasons"></ul>
+    <dl class="info"><dt>Expected</dt><dd id="rfExp"></dd><dt>Caught</dt><dd id="rfGot"></dd></dl>
+    <p id="rfWarn" class="muted small"></p>
+  </section>
+  <div class="actions" id="rfActsWait"><button id="rfCancel" class="btn" type="button">Cancel</button></div>
+  <div class="actions" id="rfActsConfirm" hidden>
+    <button id="rfKeep" class="btn primary" type="button">Keep waiting</button>
+    <button id="rfNew" class="btn" type="button">Add as new download</button>
+    <button id="rfReplace" class="btn danger" type="button">Replace and restart</button>
+  </div>
+</dialog>
+
+<dialog id="dlgQueue">
+  <h2 id="queueTitle">New queue</h2>
+  <label class="field"><span>Name</span><input id="queueName" type="text" maxlength="40" spellcheck="false"></label>
+  <p id="queueErr" class="err" hidden></p>
+  <div class="actions"><button id="queueCancel" class="btn" type="button">Cancel</button><button id="queueOk" class="btn primary" type="button">Save</button></div>
+</dialog>
+
+<dialog id="dlgSettings" class="wide">
+  <h2>Settings</h2>
+  <div class="tabs small" id="setTabs"><button data-p="general" class="active">General</button><button data-p="browser">Browser</button><button data-p="appearance">Appearance</button><button data-p="about">About</button></div>
+
+  <section data-panel="general">
+    <div class="row2">
+      <label class="field"><span>Connections per download</span><input id="setConn" type="number" min="1" max="16"></label>
+      <label class="field"><span>Default save folder</span><div class="inline"><input id="setDir" type="text" readonly><button id="setBrowse" class="btn" type="button">Browse…</button></div></label>
+    </div>
+    <label class="check"><input id="setTray" type="checkbox"> Keep running in the tray when the window is closed <i class="muted">(frees UI memory)</i></label>
+    <label class="check"><input id="setStartup" type="checkbox"> Start with Windows (minimized to tray)</label>
+    <label class="check"><input id="setNotify" type="checkbox"> Notify when a download completes</label>
+    <label class="check"><input id="setPrune" type="checkbox"> Automatically remove completed downloads whose file was moved or deleted</label>
+  </section>
+
+  <section data-panel="browser" hidden>
+    <p id="bridgeState" class="muted"></p>
+    <p class="muted small">The browser extension finds this app by itself and asks you to allow the connection, so there is nothing to copy. The token below is only a manual fallback.</p>
+    <label class="field"><span>Pairing token <i class="muted">(only needed for manual pairing)</i></span>
+      <div class="inline"><input id="setToken" type="text" readonly><button id="tokCopy" class="btn" type="button">Copy</button><button id="tokRegen" class="btn" type="button">Regenerate</button></div></label>
+    <div class="field"><span>Bypass key <i class="muted">(hold it while clicking a download to let your browser handle it)</i></span>
+      <div class="inline"><button id="keyBtn" class="btn keybtn" type="button"></button><button id="keyReset" class="btn" type="button" title="Back to the default (F8)">Reset</button><button id="keyOff" class="btn" type="button">Turn off</button></div>
+      <p class="muted small" id="keyHint"></p></div>
+    <label class="field narrow"><span>Preferred port</span><input id="setPort" type="number" min="1024" max="65535"></label>
+    <p class="muted small">If this port is busy, DownloaDan uses the next free one (18642 to 18651). The extension looks through the same range.</p>
+  </section>
+
+  <section data-panel="appearance" hidden>
+    <div class="actions left"><button id="themeNew" class="btn primary" type="button">New theme</button><button id="themeImport" class="btn" type="button">Import theme…</button></div>
+    <div id="themeGrid" class="theme-grid"></div>
+    <p class="muted small">Themes are plain colour/shape settings. They can never contain code, links or images, and imported files are strictly validated.</p>
+  </section>
+
+  <section data-panel="about" hidden>
+    <div class="upd-box">
+      <div class="upd-head"><b>DownloaDan</b><span class="muted" id="updVer"></span></div>
+      <p id="updMsg" class="muted"></p>
+      <div class="inline"><button id="updCheck" class="btn" type="button">Check for updates</button><button id="updAction" class="btn primary" type="button" hidden></button></div>
+    </div>
+    <label class="check"><input id="setAutoUpdate" type="checkbox"> Check for updates when DownloaDan starts</label>
+    <p class="muted small">Updates come from the official releases page. DownloaDan never downloads or installs one without your click. A downloaded update also installs the next time you quit DownloaDan, and unfinished downloads resume automatically afterwards.</p>
+  </section>
+
+  <div class="actions"><button id="setClose" class="btn primary" type="button">Done</button></div>
+</dialog>
+
+<dialog id="dlgTheme" class="wide">
+  <h2 id="themeTitle">Theme editor</h2>
+  <div class="row2">
+    <label class="field"><span>Name</span><input id="thName" type="text" maxlength="40" spellcheck="false"></label>
+    <label class="field"><span>Author <i class="muted">(optional)</i></span><input id="thAuthor" type="text" maxlength="40" spellcheck="false"></label>
+  </div>
+  <div id="thColors" class="color-grid"></div>
+  <div class="row3">
+    <label class="field"><span>Corner radius: <b id="thRadiusVal"></b></span><input id="thRadius" type="range" min="0" max="20" step="1"></label>
+    <label class="field"><span>Density</span><select id="thDensity"><option value="compact">Compact</option><option value="comfortable">Comfortable</option><option value="spacious">Spacious</option></select></label>
+    <label class="field"><span>Font</span><select id="thFont"><option value="system">System</option><option value="segoe">Segoe UI</option><option value="mono">Monospace</option><option value="serif">Serif</option></select></label>
+  </div>
+  <p id="thErr" class="err" hidden></p>
+  <div class="actions"><button id="thCancel" class="btn" type="button">Cancel</button><button id="thSave" class="btn primary" type="button">Save theme</button></div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

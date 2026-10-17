@@ -1,0 +1,66 @@
+{
+  "name": "downloadan",
+  "productName": "DownloaDan",
+  "version": "1.0.2",
+  "description": "A lightweight, modern download manager for Windows",
+  "main": "src/main/main.js",
+  "author": "Hydelix",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --check src/main/main.js",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.downloadan.app",
+    "productName": "DownloaDan",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": [
+      "en-US"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "artifactName": "DownloaDan-Setup-${version}.${ext}",
+      "allowElevation": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Hydelix",
+        "repo": "downloadan-releases",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}
