@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = ["core", "src-tauri"]
+
+[profile.release]
+opt-level = "s"      # small binary; the download speed is limited by the network, not the CPU
+lto = true
+codegen-units = 1
+strip = true

@@ -2,7 +2,7 @@
 <html lang="en" data-density="comfortable" data-font="system">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; base-uri 'none'; form-action 'none'">
 <title>DownloaDan</title>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -10,7 +10,7 @@
 <header class="titlebar">
   <div class="brand"><span class="logo"></span><b>DownloaDan</b></div>
   <input id="search" class="search" type="search" placeholder="Search downloads" autocomplete="off">
-</header>
+<div class="wc"><button class="wc-btn" data-wc="min" aria-label="Minimize" title="Minimize"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1" fill="none"/></svg></button><button class="wc-btn" data-wc="max" aria-label="Maximize" title="Maximize"><svg viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" stroke-width="1" fill="none"/></svg></button><button class="wc-btn close" data-wc="close" aria-label="Close" title="Close"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" stroke-width="1" fill="none"/></svg></button></div></header>
 
 <div class="shell">
   <aside class="sidebar">
@@ -195,6 +195,7 @@
   <div class="actions"><button id="thCancel" class="btn" type="button">Cancel</button><button id="thSave" class="btn primary" type="button">Save theme</button></div>
 </dialog>
 
+<script src="tauri-bridge.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,2 +1,10 @@
 node_modules/
+target/
 dist/
+src-tauri/gen/
+# never commit keys or secrets
+*.key
+*.pem
+*.pfx
+*.p12
+.env

@@ -2,12 +2,12 @@
 <html lang="en" data-density="comfortable" data-font="system">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; base-uri 'none'; form-action 'none'">
 <title>New download</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="titlebar"><div class="brand"><span class="logo"></span><b>New download</b></div><span class="spacer"></span><span id="pWait" class="muted small"></span></header>
+<header class="titlebar"><div class="brand"><span class="logo"></span><b>New download</b></div><span class="spacer"></span><span id="pWait" class="muted small"></span><div class="wc"><button class="wc-btn close" data-wc="close" aria-label="Close" title="Close"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" stroke-width="1" fill="none"/></svg></button></div></header>
 <main class="prompt">
   <section class="info-card">
     <label class="field"><span>File name</span><input id="pName" type="text" spellcheck="false"></label>
@@ -26,6 +26,7 @@
   <p id="pNote" class="err" hidden></p>
   <div class="actions"><button id="pCancel" class="btn" type="button">Cancel</button><button id="pGo" class="btn primary" type="button">Download</button></div>
 </main>
+<script src="tauri-bridge.js"></script>
 <script src="prompt.js"></script>
 </body>
 </html>

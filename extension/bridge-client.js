@@ -8,7 +8,7 @@
  * Loaded with importScripts() in the service worker and with <script> in the options page.
  */
 (function (root) {
-  const PORTS = Array.from({ length: 10 }, (_, i) => 18642 + i);   // keep in sync with PORT_RANGE in src/main/main.js
+  const PORTS = Array.from({ length: 10 }, (_, i) => 18642 + i);   // keep in sync with PORT_RANGE in src-tauri/src/state.rs
   const PROTOCOL_MIN = 1;                                           // oldest app protocol this extension understands
   const TOKEN_HEADER = 'X-DownloaDan-Token';
 

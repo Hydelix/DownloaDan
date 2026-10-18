@@ -18,11 +18,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .spacer { flex: 1; }
 [hidden] { display: none !important; }
 
-/* title bar (native window buttons are overlaid on the right) */
-.titlebar { height: 40px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 140px 0 14px; -webkit-app-region: drag; }
+/* title bar (the window buttons are drawn by the app, on the right) */
+.titlebar { height: 40px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 140px 0 14px; }
 .brand { display: flex; align-items: center; gap: 8px; }
 .logo { width: 16px; height: 16px; border-radius: 5px; background: linear-gradient(135deg, var(--accent), var(--accentText)); opacity: .9; }
-.search { -webkit-app-region: no-drag; width: min(360px, 40vw); margin-left: auto; margin-right: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; outline: none; }
+.search { width: min(360px, 40vw); margin-left: auto; margin-right: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; outline: none; }
 .search:focus { border-color: var(--accent); }
 
 .shell { flex: 1; display: flex; min-height: 0; }
@@ -183,3 +183,10 @@ dialog { max-height: calc(100vh - 32px); overflow: auto; }
 /* Connect-browser box */
 .pair dl.info { grid-template-columns: 82px minmax(0, 1fr); margin: 10px 0; }
 .pair p { margin: 0 0 10px; }
+
+/* window buttons */
+.wc { position: fixed; top: 0; right: 0; height: 40px; display: flex; z-index: 100; }
+.wc-btn { width: 46px; height: 40px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text); display: grid; place-items: center; cursor: default; }
+.wc-btn svg { width: 10px; height: 10px; }
+.wc-btn:hover { background: var(--surface2); }
+.wc-btn.close:hover { background: #e5384b; color: #fff; }
