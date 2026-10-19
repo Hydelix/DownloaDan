@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAp0VKLuRpTWzBXEpY83U5bTiuUuHGPtxog6ni2MZOCK/O3ZVcj8rkajYxnIamohs7jOx9ALBtsaTChJAAEQqtaiEk9YdnxoLyr7rv0oDmtoi15A77704oQQRBSijtA7utCTpL61+fu3LrdadoTY9xb6pSGNZ3En/nWMywZUhc7Rt2x3KUe3fBA1LpNd4WNmyxMhY/VjYMwTRZomodtMwxfAFuzywaST8t2lkPfRtphfKaWBkN91zIA62AiYz46+t1z5bH9c9sWxYv7OgzGGLapy7Wtu+muklA8IsNTZtKhxu8XpPVmdqBDcV1K3xYNckvzpTHeOBcOTvRmZ02cNygkQIDAQAB",
   "name": "DownloaDan Integration",
-  "version": "1.3.0",
-  "description": "Adds a download button to videos and sends links to the DownloaDan desktop app.",
+  "version": "1.4.0",
+  "description": "Sends downloads and links from your browser to the DownloaDan desktop app.",
   "minimum_chrome_version": "110",
   "icons": {
     "16": "icons/16.png",
@@ -13,7 +13,6 @@
   },
   "permissions": [
     "storage",
-    "webRequest",
     "contextMenus",
     "downloads",
     "cookies"

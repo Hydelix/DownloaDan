@@ -40,16 +40,23 @@ pub struct Bridge {
     stop: Mutex<Option<CancellationToken>>,
 }
 
-/// `chrome-extension://<id>` or `moz-extension://<id>`: the kind and the id.
-fn parse_extension_origin(origin: &str) -> Option<(&str, &str)> {
-    let (kind, id) = if let Some(id) = origin.strip_prefix("chrome-extension://") {
-        ("chrome", id)
-    } else if let Some(id) = origin.strip_prefix("moz-extension://") {
-        ("moz", id)
-    } else {
-        return None;
-    };
-    (!id.is_empty() && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())).then_some((kind, id))
+enum ExtOrigin<'a> {
+    /// `chrome-extension://<32 letters>`: the ID is the extension's real, fixed ID.
+    Chromium(&'a str),
+    /// `moz-extension://<uuid>`: a random address Firefox makes up for each install; NOT the add-on ID.
+    Firefox(&'a str),
+}
+
+fn is_uuid(s: &str) -> bool {
+    s.len() == 36 && s.bytes().enumerate().all(|(i, b)| if matches!(i, 8 | 13 | 18 | 23) { b == b'-' } else { b.is_ascii_digit() || (b'a'..=b'f').contains(&b) })
+}
+
+fn parse_extension_origin(origin: &str) -> Option<ExtOrigin<'_>> {
+    if let Some(id) = origin.strip_prefix("chrome-extension://") {
+        return (!id.is_empty() && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())).then_some(ExtOrigin::Chromium(id));
+    }
+    let id = origin.strip_prefix("moz-extension://")?;
+    is_uuid(id).then_some(ExtOrigin::Firefox(id))
 }
 
 fn json_response(code: u16, body: Value) -> Response<Full<Bytes>> {
@@ -85,8 +92,14 @@ async fn handle_inner(api: Arc<Api>, port: u16, req: Request<Incoming>) -> Respo
     let ctx = Ctx {
         trusted: false,
         token,
-        // only Chromium extensions can be paired
-        extension_id: parsed.filter(|(kind, _)| *kind == "chrome").map(|(_, id)| id.to_string()),
+        extension_id: match &parsed {
+            Some(ExtOrigin::Chromium(id)) => Some(id.to_string()),
+            _ => None,
+        },
+        firefox_origin: match &parsed {
+            Some(ExtOrigin::Firefox(id)) => Some(id.to_string()),
+            _ => None,
+        },
         user_agent: headers.get(USER_AGENT).and_then(|v| v.to_str().ok()).map(str::to_string),
     };
     let content_type_json = headers.get(CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|v| v.to_ascii_lowercase().starts_with("application/json"));
@@ -208,11 +221,14 @@ mod tests {
 
     #[test]
     fn origins() {
-        assert_eq!(parse_extension_origin("chrome-extension://abcdef0123"), Some(("chrome", "abcdef0123")));
-        assert_eq!(parse_extension_origin("moz-extension://abc123"), Some(("moz", "abc123")));
-        assert_eq!(parse_extension_origin("https://evil.example"), None);
-        assert_eq!(parse_extension_origin("chrome-extension://UPPER"), None);
-        assert_eq!(parse_extension_origin("chrome-extension://"), None);
-        assert_eq!(parse_extension_origin("chrome-extension://abc/def"), None);
+        assert!(matches!(parse_extension_origin("chrome-extension://abcdef0123"), Some(ExtOrigin::Chromium("abcdef0123"))));
+        let uuid = "0b5d3c1e-8a47-4f6b-9c21-7e3a5d9f1b04";
+        assert!(matches!(parse_extension_origin(&format!("moz-extension://{uuid}")), Some(ExtOrigin::Firefox(u)) if u == uuid));
+        assert!(parse_extension_origin("moz-extension://abc123").is_none(), "Firefox addresses are UUIDs");
+        assert!(parse_extension_origin("moz-extension://0B5D3C1E-8A47-4F6B-9C21-7E3A5D9F1B04").is_none());
+        assert!(parse_extension_origin("https://evil.example").is_none());
+        assert!(parse_extension_origin("chrome-extension://UPPER").is_none());
+        assert!(parse_extension_origin("chrome-extension://").is_none());
+        assert!(parse_extension_origin("chrome-extension://abc/def").is_none());
     }
 }

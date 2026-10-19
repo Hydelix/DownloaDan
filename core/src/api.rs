@@ -30,8 +30,11 @@ pub struct Ctx {
     pub trusted: bool,
     /// The pairing token the caller presented.
     pub token: Option<String>,
-    /// The extension ID the transport verified (HTTP: taken from the Origin header).
+    /// The Chromium extension ID the transport verified (HTTP: taken from the Origin header).
     pub extension_id: Option<String>,
+    /// Firefox only: the random per-install address Firefox gives an extension (moz-extension://<this>).
+    /// It is NOT the add-on's ID, so it cannot be checked against an allowlist; see `pair_start`.
+    pub firefox_origin: Option<String>,
     /// Only used to show "Chrome" or "Edge" in the permission box.
     pub user_agent: Option<String>,
 }
@@ -50,6 +53,8 @@ pub struct Pending {
     pub id: String,
     pub extension_id: String,
     pub browser: String,
+    /// True when the extension's identity was checked against the allowlist (Chromium). Firefox cannot be checked.
+    pub verified: bool,
     pub created_at: i64,
     /// None while the user has not answered; otherwise allowed | denied | expired.
     pub decision: Option<String>,
@@ -60,6 +65,8 @@ pub fn browser_name(ua: &str) -> &'static str {
         "Microsoft Edge"
     } else if ua.contains("OPR/") {
         "Opera"
+    } else if ua.contains("Firefox/") {
+        "Mozilla Firefox"
     } else if ua.contains("Chrome/") {
         "Google Chrome"
     } else {
@@ -104,6 +111,11 @@ impl Api {
 
     fn now(&self) -> i64 {
         (self.cfg.now)()
+    }
+
+    /// Who is calling, as one string: the Chromium extension ID, or "moz:<uuid>" for Firefox.
+    fn caller_key(ctx: &Ctx) -> Option<String> {
+        ctx.extension_id.clone().or_else(|| ctx.firefox_origin.as_ref().map(|u| format!("moz:{u}")))
     }
 
     fn authed(&self, ctx: &Ctx) -> bool {
@@ -159,9 +171,16 @@ impl Api {
     }
 
     fn pair_start(&self, ctx: &Ctx) -> Reply {
-        let Some(id) = ctx.extension_id.clone().filter(|id| self.cfg.allowed_ids.contains(id)) else {
+        // Chromium: the extension ID must be on the allowlist. Firefox: the browser only reveals a random per-install
+        // address, so the ID cannot be checked. Those requests still need the user to click Allow, and they share the
+        // same rate limits and cool-down, but the box tells the user the extension could not be verified.
+        let Some(id) = Self::caller_key(ctx) else {
             return reply(403, json!({ "error": "unknown-extension" }));
         };
+        let verified = !id.starts_with("moz:");
+        if verified && !self.cfg.allowed_ids.contains(&id) {
+            return reply(403, json!({ "error": "unknown-extension" }));
+        }
         let mut expired = None;
         let (out, created) = {
             let mut st = self.st.lock();
@@ -193,6 +212,7 @@ impl Api {
                 id: random_hex(16),
                 extension_id: id,
                 browser: browser_name(ctx.user_agent.as_deref().unwrap_or("")).to_string(),
+                verified,
                 created_at: now,
                 decision: None,
             };
@@ -214,7 +234,8 @@ impl Api {
             let expired = self.tick(&mut st);
             let now = self.now();
             let pair_id = b.get("pairId").and_then(Value::as_str);
-            let out = match (&st.pending, &ctx.extension_id, pair_id) {
+            let caller = Self::caller_key(ctx);
+            let out = match (&st.pending, &caller, pair_id) {
                 (Some(p), Some(ext), Some(pid)) if &p.extension_id == ext && p.id == pid => match p.decision.as_deref() {
                     None => reply(200, json!({ "status": "pending", "secondsLeft": (((PAIR_TTL_MS - (now - p.created_at)) as f64 / 1000.0).ceil() as i64).max(0) })),
                     Some("allowed") => {
@@ -301,6 +322,10 @@ mod tests {
         Ctx { extension_id: Some(id.into()), user_agent: Some("Mozilla/5.0 Chrome/130 Edg/130".into()), ..Default::default() }
     }
 
+    fn firefox(uuid: &str) -> Ctx {
+        Ctx { firefox_origin: Some(uuid.into()), user_agent: Some("Mozilla/5.0 (Windows NT 10.0; rv:140.0) Gecko/20100101 Firefox/140.0".into()), ..Default::default() }
+    }
+
     #[test]
     fn add_needs_the_token_and_a_http_url() {
         let f = fixture();
@@ -338,6 +363,32 @@ mod tests {
         assert_eq!(s.body["status"], "allowed");
         assert_eq!(s.body["token"], "secret-token");
         assert_eq!(f.api.handle("pair.status", &json!({"pairId": pid}), &ext("goodext")).code, 404);
+    }
+
+    #[test]
+    fn firefox_can_pair_but_is_marked_unverified() {
+        let f = fixture();
+        let ff = firefox("11111111-2222-4333-8444-555555555555");
+        let r = f.api.handle("pair.start", &json!({}), &ff);
+        assert_eq!(r.code, 200);
+        let pid = r.body["pairId"].as_str().unwrap().to_string();
+        let p = f.api.pending_pairing().unwrap();
+        assert_eq!(p.browser, "Mozilla Firefox");
+        assert!(!p.verified, "Firefox identities cannot be checked");
+        // another Firefox extension cannot collect the answer
+        let other = firefox("99999999-2222-4333-8444-555555555555");
+        assert_eq!(f.api.handle("pair.status", &json!({"pairId": pid}), &other).code, 404);
+        assert!(f.api.resolve_pairing(&pid, true));
+        let s = f.api.handle("pair.status", &json!({"pairId": pid}), &ff);
+        assert_eq!(s.body["status"], "allowed");
+        assert_eq!(s.body["token"], "secret-token");
+    }
+
+    #[test]
+    fn a_chromium_extension_is_still_verified() {
+        let f = fixture();
+        f.api.handle("pair.start", &json!({}), &ext("goodext"));
+        assert!(f.api.pending_pairing().unwrap().verified);
     }
 
     #[test]

@@ -22,7 +22,10 @@ api.init().then((p) => {
   if (!p) { api.answer(false); return; }
   applyTheme(p.theme);
   $('pqBrowser').textContent = p.browser;
-  $('pqExt').textContent = 'DownloaDan Integration (' + p.extensionId.slice(0, 8) + '…)';
+  // Chromium browsers reveal the extension's real ID, so it is checked against a list. Firefox does not, so say so honestly.
+  $('pqExt').textContent = p.verified === false
+    ? 'A Firefox extension (Firefox does not let DownloaDan check which one)'
+    : 'DownloaDan Integration (' + p.extensionId.slice(0, 8) + '…)';
   left = p.secondsLeft; tick(); timer = setInterval(tick, 1000);
   $('pqDeny').focus();                                   // Enter or a stray click never means "Allow"
 });

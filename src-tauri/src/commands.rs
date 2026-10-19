@@ -232,7 +232,7 @@ pub async fn pair_init(window: WebviewWindow, state: St<'_>) -> Res<Option<Value
     let st = state.inner().clone();
     let out = st.api.pending_pairing().map(|p| {
         let left = (60 - ((downloadan_core::util::now_ms() - p.created_at) / 1000)).max(0);
-        json!({ "theme": st.mgr.active_theme(), "browser": p.browser, "extensionId": p.extension_id, "secondsLeft": left })
+        json!({ "theme": st.mgr.active_theme(), "browser": p.browser, "extensionId": p.extension_id, "verified": p.verified, "secondsLeft": left })
     });
     windows::reveal(&window);
     Ok(out)

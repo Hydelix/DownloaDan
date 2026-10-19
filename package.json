@@ -8,9 +8,14 @@
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
-    "test": "cargo test -p downloadan-core"
+    "test": "cargo test -p downloadan-core",
+    "firefox:build": "node scripts/build-firefox.mjs",
+    "firefox:run": "npm run firefox:build && web-ext run -s dist/firefox",
+    "firefox:lint": "npm run firefox:build && web-ext lint -s dist/firefox",
+    "firefox:package": "npm run firefox:build && web-ext build -s dist/firefox -a dist/firefox-package --overwrite-dest"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tauri-apps/cli": "^2",
+    "web-ext": "^10.8.0"
   }
 }

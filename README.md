@@ -1,7 +1,7 @@
 # DownloaDan
 
 A fast, minimalist download manager for Windows: multi-connection downloads with resume, queues, a browser
-extension that puts a download icon on videos, and safe, shareable themes.
+extension that catches your browser's downloads, and safe, shareable themes.
 
 Built with [Tauri 2](https://tauri.app) and Rust. It uses the WebView2 that already ships with Windows instead
 of bundling a browser, so the installer is a few MB and it idles on a small fraction of the memory an Electron app needs.
@@ -31,8 +31,30 @@ The first build compiles everything and takes several minutes; after that it is 
 ## Browser extension
 Load the `extension` folder (`chrome://extensions` -> Developer mode -> Load unpacked). It opens a page that finds
 DownloaDan by itself (it looks through ports 18642-18651) and DownloaDan asks you to **Allow** the connection. No token to copy.
-Hover a video and click the icon in its top-right corner, or right-click any link or media and choose
-**Download with DownloaDan**. DownloaDan always shows its Add box, so you confirm every download.
+Normal browser downloads are sent to DownloaDan automatically (you can turn this off on the extension's page), and you can
+right-click any link and choose **Download with DownloaDan**. DownloaDan always shows its Add box, so you confirm every download.
+Hold the bypass key (F8 by default, change it in Settings) while clicking a download to let the browser handle it instead.
+
+### Firefox
+The same extension works in Firefox 140 or newer. `firefox/manifest.json` is the only Firefox-specific file; the build script copies
+`extension/` next to it:
+
+| Command | What it does |
+| --- | --- |
+| `npm run firefox:build` | Writes the Firefox extension to `dist/firefox` |
+| `npm run firefox:run` | Opens a test Firefox with it loaded (needs Firefox installed) |
+| `npm run firefox:lint` | Checks it with Mozilla's validator |
+| `npm run firefox:package` | Makes the zip to upload to addons.mozilla.org |
+
+To try it without any account: open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, and pick
+`dist/firefox/manifest.json`. It is removed when Firefox closes. For everyday use, regular Firefox only runs extensions signed
+by Mozilla: upload the zip at addons.mozilla.org as **On your own** (signed file for self-distribution) or publish it there.
+Keep the `version` in `extension/manifest.json` and `firefox/manifest.json` the same (the build script checks this), and never
+change the `id` in `firefox/manifest.json` once published.
+
+Firefox does not tell the app which extension is asking (it only shows a random per-install address), so DownloaDan cannot check
+Firefox extensions against its list the way it does for Chrome. A Firefox request still needs your click on **Allow**, and the box
+says the extension could not be verified. Native messaging would fix this later (see the design note at the end).
 
 The extension has a fixed ID (set by the `key` in `extension/manifest.json`). If you publish it on a store, each store
 gives it its own ID: add that ID to `ALLOWED_EXTENSION_IDS` in `core/src/api.rs`, and remove the `key` line from the
@@ -47,7 +69,8 @@ colours, a corner radius, a density and a font from a fixed list. Imports are re
 exceed 8 KB, or have unreadable contrast.
 
 ## Known limits
-Adaptive/DRM streams (YouTube, Netflix, HLS/DASH playlists) are not supported; only direct files.
+Only direct file links are supported. There is no video-site downloader: streams from YouTube, Netflix and similar sites
+(HLS/DASH playlists, DRM) are not handled.
 
 ## Releasing an update
 Updates are signed. The private key never goes in the repo; the public key lives in `src-tauri/tauri.conf.json`

@@ -121,3 +121,23 @@ async fn full_pairing_flow_over_http() {
     let resp = r.http.get(r.url("/ping")).header("x-downloadan-token", "tok-123").header("origin", EXT).send().await.unwrap();
     assert_eq!(resp.status(), 200);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn firefox_extensions_are_accepted_but_other_odd_origins_are_not() {
+    let r = rig().await;
+    let ff = "moz-extension://0b5d3c1e-8a47-4f6b-9c21-7e3a5d9f1b04";
+    let resp = r.http.get(r.url("/hello")).header("origin", ff).send().await.unwrap();
+    assert_eq!(resp.status(), 200);
+    // a made-up moz-extension address is refused like any other web origin
+    let resp = r.http.get(r.url("/hello")).header("origin", "moz-extension://not-a-uuid").send().await.unwrap();
+    assert_eq!(resp.status(), 403);
+    // full pairing from Firefox, then adding a download with the token
+    let (code, v) = r.post("/pair/start", Some(ff), None, &json!({})).await;
+    assert_eq!(code, 200);
+    let pid = v["pairId"].as_str().unwrap().to_string();
+    assert!(r.api.resolve_pairing(&pid, true));
+    let (_, s) = r.post("/pair/status", Some(ff), None, &json!({ "pairId": pid })).await;
+    assert_eq!(s["status"], "allowed");
+    assert_eq!(s["token"], "tok-123");
+    assert_eq!(r.post("/add", Some(ff), Some("tok-123"), &json!({ "url": "https://example.org/f.zip" })).await.0, 200);
+}
