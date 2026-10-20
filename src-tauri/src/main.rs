@@ -26,6 +26,7 @@ fn quit(app: &AppHandle) {
     if st.quitting.swap(true, Ordering::SeqCst) {
         return;
     }
+    windows::save_geometry(app);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         st.bridge.close();
@@ -185,12 +186,6 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(
-            tauri_plugin_window_state::Builder::default()
-                .with_state_flags(tauri_plugin_window_state::StateFlags::SIZE | tauri_plugin_window_state::StateFlags::POSITION | tauri_plugin_window_state::StateFlags::MAXIMIZED)
-                .with_denylist(&["prompt", "pair"])
-                .build(),
-        )
         .invoke_handler(tauri::generate_handler![
             commands::state_get, commands::clip_read, commands::clip_write,
             commands::dl_add, commands::dl_pause, commands::dl_pause_all, commands::dl_resume, commands::dl_remove,
@@ -211,12 +206,16 @@ fn main() {
             let st = st.inner().clone();
             match (window.label(), event) {
                 ("main", WindowEvent::CloseRequested { api, .. }) => {
+                    windows::track(window);
+                    windows::save_geometry(app);
                     if !st.mgr.settings().minimize_to_tray && !st.quitting.load(Ordering::SeqCst) {
                         api.prevent_close();
                         quit(app);
                     }
                     // otherwise the window is simply destroyed (its memory is released) and the app stays in the tray
                 }
+                ("main", WindowEvent::Moved(_) | WindowEvent::Resized(_)) => windows::track(window),
+                ("main", WindowEvent::Focused(false)) => windows::save_geometry(app),
                 ("main", WindowEvent::Destroyed) => st.notifier.ready.store(false, Ordering::SeqCst),
                 ("main", WindowEvent::Focused(true)) => {
                     let mgr = st.mgr.clone();
