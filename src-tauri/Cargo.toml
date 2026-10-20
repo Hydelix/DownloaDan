@@ -1,6 +1,6 @@
 [package]
 name = "downloadan"
-version = "2.0.1"
+version = "2.0.2"
 description = "A fast, minimalist download manager"
 authors = ["Hydelix"]
 license = "MIT"
