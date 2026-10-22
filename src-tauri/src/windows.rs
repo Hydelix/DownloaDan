@@ -43,6 +43,19 @@ struct Geometry {
 /// The last good geometry of the main window. For a maximized window this is its normal (restored) size and position.
 static LAST: Mutex<Option<Geometry>> = Mutex::new(None);
 
+/// Set while a freshly opened window is being put back where it was. Nothing is remembered until it has settled,
+/// so a half-finished resize can never be saved as the window's position.
+static TARGET: Mutex<Option<Geometry>> = Mutex::new(None);
+static SETTLING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn get_target() -> Option<Geometry> {
+    *TARGET.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn set_target(g: Option<Geometry>) {
+    *TARGET.lock().unwrap_or_else(|e| e.into_inner()) = g;
+}
+
 fn geometry_file(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_data_dir().ok().map(|d| d.join("window.json"))
 }
@@ -69,6 +82,9 @@ fn scale_for(app: &AppHandle, g: &Geometry) -> Option<f64> {
 
 /// Note where the main window is. Called on every move and resize, so it only touches memory.
 pub fn track(w: &Window) {
+    if get_target().is_some() {
+        return; // still being put back in place
+    }
     // Windows parks a minimized window far off-screen; never remember that.
     if w.is_minimized().unwrap_or(false) {
         return;
@@ -116,9 +132,13 @@ pub fn show_main(app: &AppHandle) {
         // The builder works in scaled units; the exact pixels are applied right after it is built.
         Some((g, scale)) => {
             *LAST.lock().unwrap_or_else(|e| e.into_inner()) = Some(g);
+            set_target(if g.maximized { None } else { Some(g) });
             builder.inner_size(g.w as f64 / scale, g.h as f64 / scale).position(g.x as f64 / scale, g.y as f64 / scale)
         }
-        None => builder.inner_size(1080.0, 700.0).center(),
+        None => {
+            set_target(None);
+            builder.inner_size(1080.0, 700.0).center()
+        }
     };
     match builder.build() {
         Ok(w) => {
@@ -133,7 +153,7 @@ pub fn show_main(app: &AppHandle) {
             let w2 = w.clone();
             tauri::async_runtime::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-                let _ = w2.show();
+                reveal(&w2);
             });
         }
         Err(e) => eprintln!("Could not open the main window: {e}"),
@@ -198,4 +218,35 @@ pub fn close_window(app: &AppHandle, label: &str) {
 pub fn reveal(w: &WebviewWindow) {
     let _ = w.show();
     let _ = w.set_focus();
+    if w.label() == "main" {
+        tauri::async_runtime::spawn(settle(w.clone()));
+    }
+}
+
+/// Once the window is on screen, check that it really sits where and as big as it was saved, and nudge it if not.
+/// Windows reports slightly different frame sizes for a hidden borderless window than for a visible one, which
+/// would otherwise make the window creep down and grow a little each time it is reopened.
+async fn settle(w: WebviewWindow) {
+    use std::sync::atomic::Ordering::SeqCst;
+    if SETTLING.swap(true, SeqCst) {
+        return;
+    }
+    if let Some(g) = get_target() {
+        for _ in 0..4 {
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            let (Ok(p), Ok(s)) = (w.outer_position(), w.inner_size()) else { break };
+            if p.x == g.x && p.y == g.y && s.width == g.w && s.height == g.h {
+                break;
+            }
+            eprintln!("main window landed at {},{} {}x{}, wanted {},{} {}x{}: correcting", p.x, p.y, s.width, s.height, g.x, g.y, g.w, g.h);
+            let _ = w.set_position(PhysicalPosition::new(g.x, g.y));
+            // ask for whatever size lands on the saved one, allowing for the difference the first request picked up
+            let width = (2 * g.w as i64 - s.width as i64).max(200) as u32;
+            let height = (2 * g.h as i64 - s.height as i64).max(200) as u32;
+            let _ = w.set_size(PhysicalSize::new(width, height));
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await; // let the last nudge land
+    }
+    set_target(None); // from here on the window is tracked normally
+    SETTLING.store(false, SeqCst);
 }
