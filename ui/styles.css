@@ -21,7 +21,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* title bar (the window buttons are drawn by the app, on the right) */
 .titlebar { height: 40px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 140px 0 14px; }
 .brand { display: flex; align-items: center; gap: 8px; }
-.logo { width: 16px; height: 16px; border-radius: 5px; background: linear-gradient(135deg, var(--accent), var(--accentText)); opacity: .9; }
+.logo { width: 16px; height: 16px; background: url(logo.png) center / contain no-repeat; }
 .search { width: min(360px, 40vw); margin-left: auto; margin-right: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; outline: none; }
 .search:focus { border-color: var(--accent); }
 
