@@ -59,6 +59,11 @@
     if (e.detail === 2 && isMain) win.toggleMaximize();
     else win.startDragging();
   });
+  // The browser's own right-click menu (Back, Reload, Save as, Print, developer tools) makes no sense in an app.
+  // Only text fields keep theirs, so copy and paste still work; the app's own menus are built where they are needed.
+  document.addEventListener('contextmenu', (e) => {
+    if (!(e.target.closest && e.target.closest('input, textarea'))) e.preventDefault();
+  });
   document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('[data-wc]');
     if (!b) return;

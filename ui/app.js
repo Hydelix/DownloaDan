@@ -300,11 +300,19 @@ document.addEventListener('keydown', (e) => {
 const ctx = $('ctx');
 function hideCtx() { ctx.hidden = true; $('sortMenu').hidden = true; }
 document.addEventListener('click', hideCtx); window.addEventListener('blur', hideCtx);
+const ctxItem = (label, fn) => h('button', { type: 'button', textContent: label, on: { click: () => { hideCtx(); fn(); } } });
+function showCtx(e, kids) {
+  e.preventDefault();
+  $('sortMenu').hidden = true;
+  ctx.replaceChildren(...kids); ctx.hidden = false;
+  ctx.style.left = Math.min(e.clientX, innerWidth - ctx.offsetWidth - 8) + 'px';
+  ctx.style.top = Math.min(e.clientY, innerHeight - ctx.offsetHeight - 8) + 'px';
+}
 $('list').addEventListener('contextmenu', (e) => {
   const row = e.target.closest('.row'); if (!row) return; e.preventDefault();
   if (!S.sel.has(row.dataset.id)) { S.sel.clear(); S.sel.add(row.dataset.id); render(); }
   const sel = selIds().map((i) => S.downloads.get(i)); const one = sel.length === 1 ? sel[0] : null;
-  const item = (label, fn) => h('button', { type: 'button', textContent: label, on: { click: () => { hideCtx(); fn(); } } });
+  const item = ctxItem;
   const kids = [];
   if (one && one.status === 'completed') kids.push(item('Open', () => api.openFile(one.id)));
   if (one) kids.push(item('Show in folder', () => api.showInFolder(one.id)));
@@ -318,10 +326,32 @@ $('list').addEventListener('contextmenu', (e) => {
   kids.push(h('hr'));
   if (one) kids.push(item('Copy link', () => { api.writeClipboard(one.url); toast('Link copied'); }));
   kids.push(item('Remove…', () => removeSelected()));
-  ctx.replaceChildren(...kids); ctx.hidden = false;
-  ctx.style.left = Math.min(e.clientX, innerWidth - ctx.offsetWidth - 8) + 'px';
-  ctx.style.top = Math.min(e.clientY, innerHeight - ctx.offsetHeight - 8) + 'px';
+  showCtx(e, kids);
 });
+
+// right-click on a queue: start / stop it, and rename or delete the ones you made (Main can't be renamed or deleted)
+$('queueList').addEventListener('contextmenu', (e) => {
+  const el = e.target.closest('.q-item');
+  const q = el && S.queues.find((x) => x.id === el.dataset.q);
+  if (!q) return;                                         // "All downloads" is a view, not a queue: no menu
+  const kids = [ctxItem('Start queue', () => { api.startQueue(q.id); toast('Queue started'); })];
+  if (q.enabled) kids.push(ctxItem('Stop queue', () => api.enableQueue(q.id, false)));
+  if (q.id !== 'main') {
+    kids.push(h('hr'), ctxItem('Rename…', () => openQueueDialog(q.id)),
+      ctxItem('Delete queue…', () => { if (confirm('Delete this queue? Its downloads move to Main.')) api.deleteQueue(q.id); }));
+  }
+  showCtx(e, kids);
+});
+
+// right-click on the empty part of the list
+function emptyMenu(e) {
+  if (e.defaultPrevented || e.target.closest('#cols')) return;
+  const kids = [ctxItem('Add URL…', () => openAdd({ fromClipboard: true }))];
+  if (shown.length) kids.push(ctxItem('Select all', () => { shown.forEach((d) => S.sel.add(d.id)); render(); }));
+  showCtx(e, kids);
+}
+$('table').addEventListener('contextmenu', emptyMenu);
+$('empty').addEventListener('contextmenu', emptyMenu);
 
 // ---------- refresh download address ----------
 let rf = null;                                             // set while a refresh is waiting
