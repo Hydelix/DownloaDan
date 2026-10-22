@@ -38,6 +38,12 @@ struct Geometry {
     h: u32,
     #[serde(default)]
     maximized: bool,
+    /// How much bigger than the saved size the window has to be asked to be to land on it (a quirk of borderless
+    /// windows on Windows). Learned the first time the window is put back, so later opens need no correction.
+    #[serde(default)]
+    bw: i32,
+    #[serde(default)]
+    bh: i32,
 }
 
 /// The last good geometry of the main window. For a maximized window this is its normal (restored) size and position.
@@ -99,7 +105,9 @@ pub fn track(w: &Window) {
     if s.width < 200 || s.height < 200 || p.x <= -30000 || p.y <= -30000 {
         return;
     }
-    *LAST.lock().unwrap_or_else(|e| e.into_inner()) = Some(Geometry { x: p.x, y: p.y, w: s.width, h: s.height, maximized: false });
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    let (bw, bh) = (*last).map(|g| (g.bw, g.bh)).unwrap_or((0, 0));
+    *last = Some(Geometry { x: p.x, y: p.y, w: s.width, h: s.height, maximized: false, bw, bh });
 }
 
 /// Write the remembered geometry to disk.
@@ -144,7 +152,7 @@ pub fn show_main(app: &AppHandle) {
         Ok(w) => {
             if let Some((g, _)) = saved {
                 let _ = w.set_position(PhysicalPosition::new(g.x, g.y));
-                let _ = w.set_size(PhysicalSize::new(g.w, g.h));
+                let _ = w.set_size(PhysicalSize::new((g.w as i32 + g.bw).max(200) as u32, (g.h as i32 + g.bh).max(200) as u32));
                 if g.maximized {
                     let _ = w.maximize();
                 }
@@ -224,29 +232,58 @@ pub fn reveal(w: &WebviewWindow) {
 }
 
 /// Once the window is on screen, check that it really sits where and as big as it was saved, and nudge it if not.
-/// Windows reports slightly different frame sizes for a hidden borderless window than for a visible one, which
-/// would otherwise make the window creep down and grow a little each time it is reopened.
+/// Windows hands a borderless window slightly different frame sizes before and after it is first shown, which
+/// would otherwise make it creep a little each time it is reopened. The correction needed is remembered
+/// (`bw`/`bh`), so after the first time the window is already right when it appears.
 async fn settle(w: WebviewWindow) {
     use std::sync::atomic::Ordering::SeqCst;
     if SETTLING.swap(true, SeqCst) {
         return;
     }
     if let Some(g) = get_target() {
-        for _ in 0..4 {
-            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        let mut ask = (g.w as i64 + g.bw as i64, g.h as i64 + g.bh as i64); // the size last asked for
+        let mut converged = false;
+        for attempt in 0..5 {
+            if attempt > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(60)).await; // let the last nudge land
+            }
             let (Ok(p), Ok(s)) = (w.outer_position(), w.inner_size()) else { break };
             if p.x == g.x && p.y == g.y && s.width == g.w && s.height == g.h {
+                converged = true;
                 break;
             }
-            eprintln!("main window landed at {},{} {}x{}, wanted {},{} {}x{}: correcting", p.x, p.y, s.width, s.height, g.x, g.y, g.w, g.h);
+            log_line(
+                w.app_handle(),
+                &format!("attempt {attempt}: at {},{} {}x{}, wanted {},{} {}x{}, asked {}x{}", p.x, p.y, s.width, s.height, g.x, g.y, g.w, g.h, ask.0, ask.1),
+            );
+            if attempt == 4 {
+                break;
+            }
+            ask = ((ask.0 - (s.width as i64 - g.w as i64)).max(200), (ask.1 - (s.height as i64 - g.h as i64)).max(200));
             let _ = w.set_position(PhysicalPosition::new(g.x, g.y));
-            // ask for whatever size lands on the saved one, allowing for the difference the first request picked up
-            let width = (2 * g.w as i64 - s.width as i64).max(200) as u32;
-            let height = (2 * g.h as i64 - s.height as i64).max(200) as u32;
-            let _ = w.set_size(PhysicalSize::new(width, height));
+            let _ = w.set_size(PhysicalSize::new(ask.0 as u32, ask.1 as u32));
         }
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await; // let the last nudge land
+        let (bw, bh) = (ask.0 - g.w as i64, ask.1 - g.h as i64);
+        if converged && bw.abs() <= 80 && bh.abs() <= 80 {
+            if let Some(last) = LAST.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+                last.bw = bw as i32;
+                last.bh = bh as i32;
+            }
+        }
     }
     set_target(None); // from here on the window is tracked normally
     SETTLING.store(false, SeqCst);
+}
+
+/// A short note in `window.log` (next to window.json) whenever the window had to be corrected. Kept small.
+fn log_line(app: &AppHandle, line: &str) {
+    use std::io::Write;
+    let Some(path) = geometry_file(app).map(|p| p.with_file_name("window.log")) else { return };
+    if std::fs::metadata(&path).map(|m| m.len() > 20_000).unwrap_or(false) {
+        let _ = std::fs::remove_file(&path);
+    }
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(f, "{secs} {line}");
+    }
 }
