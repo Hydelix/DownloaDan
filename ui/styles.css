@@ -37,7 +37,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .q-item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-item .ct { color: var(--textMuted); font-size: 11px; }
 .q-item .qb { display: none; }
-.q-item:hover .qb, .q-item.active .qb { display: inline-flex; }
+.q-item.active .qb { display: inline-flex; }
 .side-foot { padding-top: 8px; border-top: 1px solid var(--border); }
 .side-btn { width: 100%; text-align: left; background: none; border: 0; padding: 8px 10px; border-radius: calc(var(--radius) - 2px); cursor: pointer; }
 .side-btn:hover { background: var(--surface); }

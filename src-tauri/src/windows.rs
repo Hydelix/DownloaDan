@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::window::Color;
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Window};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Window};
 
 pub fn hex_color(hex: &str) -> Color {
     let p = |i: usize| u8::from_str_radix(hex.get(i..i + 2).unwrap_or("00"), 16).unwrap_or(0);
@@ -26,40 +26,39 @@ fn base<'a>(app: &'a AppHandle, label: &str, page: &str, title: &str) -> Webview
         .background_color(bg)
 }
 
-// ---- remembering where the main window was ----
-// Position and size are kept in `window.json` next to state.json. The window is only ever tracked in memory while it
-// is open (cheap), and written to disk when it closes, loses focus, or the app quits.
+// ---- remembering the size of the main window ----
+// Only the size is remembered (in `window.json` next to state.json). A window opened from the tray always appears in the
+// middle of the screen, so it can never end up off-screen; a minimized window is never closed, so Windows simply puts
+// it back where it was. The size is tracked in memory while the window is open and written to disk when it closes,
+// loses focus, or the app quits.
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 struct Geometry {
-    x: i32,
-    y: i32,
     w: u32,
     h: u32,
     #[serde(default)]
     maximized: bool,
-    /// How much bigger than the saved size the window has to be asked to be to land on it (a quirk of borderless
-    /// windows on Windows). Learned the first time the window is put back, so later opens need no correction.
+    /// How much bigger than the saved size the window has to be asked to be to come out at it (borderless windows on
+    /// Windows end up a few pixels off). Learned the first time the window is opened, so later opens are exact.
     #[serde(default)]
     bw: i32,
     #[serde(default)]
     bh: i32,
 }
 
-/// The last good geometry of the main window. For a maximized window this is its normal (restored) size and position.
+/// The last size of the main window. For a maximized window this is its normal (restored) size.
 static LAST: Mutex<Option<Geometry>> = Mutex::new(None);
 
-/// Set while a freshly opened window is being put back where it was. Nothing is remembered until it has settled,
-/// so a half-finished resize can never be saved as the window's position.
-static TARGET: Mutex<Option<Geometry>> = Mutex::new(None);
+/// The size a freshly opened window was asked for, while it is still settling in. Nothing is remembered until then.
+static OPENING: Mutex<Option<Geometry>> = Mutex::new(None);
 static SETTLING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-fn get_target() -> Option<Geometry> {
-    *TARGET.lock().unwrap_or_else(|e| e.into_inner())
+fn get_opening() -> Option<Geometry> {
+    *OPENING.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn set_target(g: Option<Geometry>) {
-    *TARGET.lock().unwrap_or_else(|e| e.into_inner()) = g;
+fn set_opening(g: Option<Geometry>) {
+    *OPENING.lock().unwrap_or_else(|e| e.into_inner()) = g;
 }
 
 fn geometry_file(app: &AppHandle) -> Option<PathBuf> {
@@ -68,49 +67,47 @@ fn geometry_file(app: &AppHandle) -> Option<PathBuf> {
 
 fn load_geometry(app: &AppHandle) -> Option<Geometry> {
     let bytes = std::fs::read(geometry_file(app)?).ok()?;
-    serde_json::from_slice(&bytes).ok()
+    let g: Geometry = serde_json::from_slice(&bytes).ok()?;
+    (g.w >= 200 && g.h >= 200).then_some(g)
 }
 
-/// The scale factor of the monitor the saved window sits on, or None if it would end up off-screen
-/// (monitor unplugged, resolution changed), in which case the window is simply centred.
-fn scale_for(app: &AppHandle, g: &Geometry) -> Option<f64> {
-    let monitors = app.available_monitors().ok()?;
-    monitors
-        .iter()
-        .find(|m| {
-            let (p, s) = (m.position(), m.size());
-            let overlap_x = (g.x + g.w as i32).min(p.x + s.width as i32) - g.x.max(p.x);
-            let overlap_y = (g.y + g.h as i32).min(p.y + s.height as i32) - g.y.max(p.y);
-            overlap_x >= 160 && overlap_y >= 80
-        })
-        .map(|m| m.scale_factor())
-}
-
-/// Note where the main window is. Called on every move and resize, so it only touches memory.
-pub fn track(w: &Window) {
-    if get_target().is_some() {
-        return; // still being put back in place
+/// The saved size (plus the learned correction) kept inside the primary monitor, in the logical units the builder takes.
+fn builder_size(app: &AppHandle, g: &Geometry) -> (f64, f64) {
+    let (mut scale, mut max_w, mut max_h) = (1.0, u32::MAX, u32::MAX);
+    if let Ok(Some(m)) = app.primary_monitor() {
+        scale = m.scale_factor();
+        max_w = m.size().width;
+        max_h = m.size().height;
     }
-    // Windows parks a minimized window far off-screen; never remember that.
+    let w = ((g.w as i64 + g.bw as i64).max(1) as u32).min(max_w);
+    let h = ((g.h as i64 + g.bh as i64).max(1) as u32).min(max_h);
+    (w as f64 / scale, h as f64 / scale)
+}
+
+/// Note the size of the main window. Called on every resize, so it only touches memory.
+pub fn track(w: &Window) {
+    if get_opening().is_some() {
+        return; // still opening: the resizing going on is the window settling in, not the user
+    }
     if w.is_minimized().unwrap_or(false) {
         return;
     }
     if w.is_maximized().unwrap_or(false) {
         if let Some(g) = LAST.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
-            g.maximized = true; // keep the normal size and position from before it was maximized
+            g.maximized = true; // keep the normal size from before it was maximized
         }
         return;
     }
-    let (Ok(p), Ok(s)) = (w.outer_position(), w.inner_size()) else { return };
-    if s.width < 200 || s.height < 200 || p.x <= -30000 || p.y <= -30000 {
+    let Ok(s) = w.inner_size() else { return };
+    if s.width < 200 || s.height < 200 {
         return;
     }
     let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
     let (bw, bh) = (*last).map(|g| (g.bw, g.bh)).unwrap_or((0, 0));
-    *last = Some(Geometry { x: p.x, y: p.y, w: s.width, h: s.height, maximized: false, bw, bh });
+    *last = Some(Geometry { w: s.width, h: s.height, maximized: false, bw, bh });
 }
 
-/// Write the remembered geometry to disk.
+/// Write the remembered size to disk.
 pub fn save_geometry(app: &AppHandle) {
     let Some(g) = *LAST.lock().unwrap_or_else(|e| e.into_inner()) else { return };
     let Some(path) = geometry_file(app) else { return };
@@ -134,34 +131,24 @@ pub fn show_main(app: &AppHandle) {
     }
     let st = state(app);
     st.notifier.ready.store(false, std::sync::atomic::Ordering::SeqCst);
-    let saved = load_geometry(app).and_then(|g| scale_for(app, &g).map(|scale| (g, scale)));
-    let builder = base(app, "main", "index.html", "DownloaDan").min_inner_size(860.0, 540.0).resizable(true);
+    let saved = load_geometry(app);
+    *LAST.lock().unwrap_or_else(|e| e.into_inner()) = saved;
+    set_opening(saved.filter(|g| !g.maximized));
+    let builder = base(app, "main", "index.html", "DownloaDan").min_inner_size(860.0, 540.0).resizable(true).center();
     let builder = match saved {
-        // The builder works in scaled units; the exact pixels are applied right after it is built.
-        Some((g, scale)) => {
-            *LAST.lock().unwrap_or_else(|e| e.into_inner()) = Some(g);
-            set_target(if g.maximized { None } else { Some(g) });
-            builder.inner_size(g.w as f64 / scale, g.h as f64 / scale).position(g.x as f64 / scale, g.y as f64 / scale)
+        Some(g) => {
+            let (w, h) = builder_size(app, &g);
+            builder.inner_size(w, h).maximized(g.maximized)
         }
-        None => {
-            set_target(None);
-            builder.inner_size(1080.0, 700.0).center()
-        }
+        None => builder.inner_size(1080.0, 700.0),
     };
     match builder.build() {
         Ok(w) => {
-            if let Some((g, _)) = saved {
-                let _ = w.set_position(PhysicalPosition::new(g.x, g.y));
-                let _ = w.set_size(PhysicalSize::new((g.w as i32 + g.bw).max(200) as u32, (g.h as i32 + g.bh).max(200) as u32));
-                if g.maximized {
-                    let _ = w.maximize();
-                }
-            }
             // safety net: never leave the window hidden if the page fails to report in
             let w2 = w.clone();
             tauri::async_runtime::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-                reveal(&w2);
+                let _ = w2.show();
             });
         }
         Err(e) => eprintln!("Could not open the main window: {e}"),
@@ -231,51 +218,32 @@ pub fn reveal(w: &WebviewWindow) {
     }
 }
 
-/// Once the window is on screen, check that it really sits where and as big as it was saved, and nudge it if not.
-/// Windows hands a borderless window slightly different frame sizes before and after it is first shown, which
-/// would otherwise make it creep a little each time it is reopened. The correction needed is remembered
-/// (`bw`/`bh`), so after the first time the window is already right when it appears.
+/// A moment after the window appears, see what size it really came out at. Windows can hand a borderless window a few
+/// pixels more or less than asked for; the difference is remembered (`bw`/`bh`) and allowed for the next time, so the
+/// window reopens at exactly the size it was closed at. Nothing is moved or resized here, so nothing is seen to change.
 async fn settle(w: WebviewWindow) {
     use std::sync::atomic::Ordering::SeqCst;
     if SETTLING.swap(true, SeqCst) {
         return;
     }
-    if let Some(g) = get_target() {
-        let mut ask = (g.w as i64 + g.bw as i64, g.h as i64 + g.bh as i64); // the size last asked for
-        let mut converged = false;
-        for attempt in 0..5 {
-            if attempt > 0 {
-                tokio::time::sleep(std::time::Duration::from_millis(60)).await; // let the last nudge land
-            }
-            let (Ok(p), Ok(s)) = (w.outer_position(), w.inner_size()) else { break };
-            if p.x == g.x && p.y == g.y && s.width == g.w && s.height == g.h {
-                converged = true;
-                break;
-            }
-            log_line(
-                w.app_handle(),
-                &format!("attempt {attempt}: at {},{} {}x{}, wanted {},{} {}x{}, asked {}x{}", p.x, p.y, s.width, s.height, g.x, g.y, g.w, g.h, ask.0, ask.1),
-            );
-            if attempt == 4 {
-                break;
-            }
-            ask = ((ask.0 - (s.width as i64 - g.w as i64)).max(200), (ask.1 - (s.height as i64 - g.h as i64)).max(200));
-            let _ = w.set_position(PhysicalPosition::new(g.x, g.y));
-            let _ = w.set_size(PhysicalSize::new(ask.0 as u32, ask.1 as u32));
-        }
-        let (bw, bh) = (ask.0 - g.w as i64, ask.1 - g.h as i64);
-        if converged && bw.abs() <= 80 && bh.abs() <= 80 {
-            if let Some(last) = LAST.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
-                last.bw = bw as i32;
-                last.bh = bh as i32;
+    if let Some(g) = get_opening() {
+        tokio::time::sleep(std::time::Duration::from_millis(450)).await;
+        if let Ok(s) = w.inner_size() {
+            let (dw, dh) = (s.width as i64 - g.w as i64, s.height as i64 - g.h as i64);
+            if (dw != 0 || dh != 0) && dw.abs() <= 80 && dh.abs() <= 80 {
+                if let Some(last) = LAST.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+                    last.bw = g.bw - dw as i32;
+                    last.bh = g.bh - dh as i32;
+                }
+                log_line(w.app_handle(), &format!("opened {}x{}, wanted {}x{} (was asking for {:+},{:+}): now allowing {:+},{:+}", s.width, s.height, g.w, g.h, g.bw, g.bh, g.bw - dw as i32, g.bh - dh as i32));
             }
         }
     }
-    set_target(None); // from here on the window is tracked normally
+    set_opening(None); // from here on, resizing is the user's
     SETTLING.store(false, SeqCst);
 }
 
-/// A short note in `window.log` (next to window.json) whenever the window had to be corrected. Kept small.
+/// A short note in `window.log` (next to window.json) whenever the opening size had to be adjusted. Kept small.
 fn log_line(app: &AppHandle, line: &str) {
     use std::io::Write;
     let Some(path) = geometry_file(app).map(|p| p.with_file_name("window.log")) else { return };

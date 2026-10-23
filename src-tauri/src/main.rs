@@ -206,7 +206,6 @@ fn main() {
             let st = st.inner().clone();
             match (window.label(), event) {
                 ("main", WindowEvent::CloseRequested { api, .. }) => {
-                    windows::track(window);
                     windows::save_geometry(app);
                     if !st.mgr.settings().minimize_to_tray && !st.quitting.load(Ordering::SeqCst) {
                         api.prevent_close();
@@ -214,7 +213,7 @@ fn main() {
                     }
                     // otherwise the window is simply destroyed (its memory is released) and the app stays in the tray
                 }
-                ("main", WindowEvent::Moved(_) | WindowEvent::Resized(_)) => windows::track(window),
+                ("main", WindowEvent::Resized(_)) => windows::track(window),
                 ("main", WindowEvent::Focused(false)) => windows::save_geometry(app),
                 ("main", WindowEvent::Destroyed) => st.notifier.ready.store(false, Ordering::SeqCst),
                 ("main", WindowEvent::Focused(true)) => {
