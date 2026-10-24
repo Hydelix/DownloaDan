@@ -26,7 +26,7 @@ The first build compiles everything and takes several minutes; after that it is 
 - `core/` the engine, queue manager, browser bridge and theme rules, in Rust. No UI code, fully tested (`cargo test -p downloadan-core`).
 - `src-tauri/` the app shell: windows, tray, notifications, updater, and the commands the pages can call.
 - `ui/` the pages (plain HTML, CSS and JavaScript, no build step).
-- `extension/` the browser extension (Chrome, Edge, Brave).
+- `extension/` the browser extension (Chrome, Edge, Brave, Firefox).
 
 ## Browser extension
 Load the `extension` folder (`chrome://extensions` -> Developer mode -> Load unpacked). It opens a page that finds
@@ -36,6 +36,11 @@ right-click any link and choose **Download with DownloaDan**. DownloaDan always 
 Hold the bypass key (F8 by default, change it in Settings) while clicking a download to let the browser handle it instead.
 
 ### Firefox
+**[Install DownloaDan Integration from Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/downloadan-integration/)**
+(Firefox 140 or newer). It needs the DownloaDan desktop app: click the extension's toolbar icon, choose **Connect**, and approve
+the request in DownloaDan.
+
+#### Building it yourself
 The same extension works in Firefox 140 or newer. `firefox/manifest.json` is the only Firefox-specific file; the build script copies
 `extension/` next to it:
 
@@ -47,8 +52,9 @@ The same extension works in Firefox 140 or newer. `firefox/manifest.json` is the
 | `npm run firefox:package` | Makes the zip to upload to addons.mozilla.org |
 
 To try it without any account: open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, and pick
-`dist/firefox/manifest.json`. It is removed when Firefox closes. For everyday use, regular Firefox only runs extensions signed
-by Mozilla: upload the zip at addons.mozilla.org as **On your own** (signed file for self-distribution) or publish it there.
+`dist/firefox/manifest.json`. It is removed when Firefox closes. For everyday use, install the signed version from Firefox Add-ons
+(link above), since regular Firefox only runs extensions signed by Mozilla. To publish a new version, upload the zip from
+`npm run firefox:package` in the Developer Hub (your add-on, then **Upload New Version**).
 Keep the `version` in `extension/manifest.json` and `firefox/manifest.json` the same (the build script checks this), and never
 change the `id` in `firefox/manifest.json` once published.
 
