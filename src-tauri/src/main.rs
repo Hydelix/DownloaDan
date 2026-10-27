@@ -14,9 +14,9 @@ use serde_json::json;
 use state::{AppState, Caught, Notifier, PromptState};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager as _, RunEvent, WindowEvent};
 
@@ -71,6 +71,7 @@ fn build_state(app: &AppHandle) -> Result<Arc<AppState>, Box<dyn std::error::Err
             Event::Meta => {
                 if let Some(mgr) = events_notifier.mgr.get() {
                     events_notifier.send("meta", mgr.snapshot());
+                    sync_limit_item(mgr);
                 }
                 windows::apply_chrome(&events_notifier.app);
             }
@@ -126,11 +127,35 @@ fn build_state(app: &AppHandle) -> Result<Arc<AppState>, Box<dyn std::error::Err
     }))
 }
 
+/// The "Limit download speed" tray item, kept so it can follow changes made in Settings.
+static LIMIT_ITEM: OnceLock<CheckMenuItem<tauri::Wry>> = OnceLock::new();
+
+fn limit_label(kbps: i64) -> String {
+    if kbps >= 1024 && kbps % 1024 == 0 {
+        format!("Limit download speed ({} MB/s)", kbps / 1024)
+    } else if kbps >= 1024 {
+        format!("Limit download speed ({:.1} MB/s)", kbps as f64 / 1024.0)
+    } else {
+        format!("Limit download speed ({kbps} KB/s)")
+    }
+}
+
+fn sync_limit_item(mgr: &Manager) {
+    if let Some(item) = LIMIT_ITEM.get() {
+        let s = mgr.settings();
+        let _ = item.set_checked(s.speed_limit_on);
+        let _ = item.set_text(limit_label(s.speed_limit_kbps));
+    }
+}
+
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open DownloaDan", true, None::<&str>)?;
     let pause = MenuItem::with_id(app, "pause", "Pause all downloads", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &pause, &PredefinedMenuItem::separator(app)?, &quit_item])?;
+    let limits = app.state::<Arc<AppState>>().mgr.settings();
+    let limit = CheckMenuItem::with_id(app, "limit", limit_label(limits.speed_limit_kbps), true, limits.speed_limit_on, None::<&str>)?;
+    let _ = LIMIT_ITEM.set(limit.clone());
+    let menu = Menu::with_items(app, &[&open, &pause, &limit, &PredefinedMenuItem::separator(app)?, &quit_item])?;
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
     TrayIconBuilder::with_id("tray")
         .icon(icon)
@@ -140,6 +165,9 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => windows::show_main(app),
             "pause" => app.state::<Arc<AppState>>().mgr.pause_all(),
+            "limit" => {
+                app.state::<Arc<AppState>>().mgr.toggle_speed_limit();
+            }
             "quit" => quit(app),
             _ => {}
         })

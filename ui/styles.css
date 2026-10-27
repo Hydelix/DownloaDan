@@ -98,6 +98,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .empty-art { width: 64px; height: 64px; margin: 0 auto 10px; border-radius: 20px; background: linear-gradient(135deg, var(--accent), var(--surface2)); opacity: .5; }
 .empty p { margin: 2px 0; }
 .statusbar { display: flex; gap: 18px; padding: 8px 4px; border-top: 1px solid var(--border); color: var(--textMuted); font-size: 12px; }
+.stlimit { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+.stlimit:hover { color: var(--text); } .stlimit.on { color: var(--accent); }
 .statusbar .ok { color: var(--success); } .statusbar .bad { color: var(--warning); }
 
 /* dialogs */
@@ -114,6 +116,7 @@ textarea { resize: vertical; font-family: inherit; }
 .row2 { display: flex; gap: 12px; } .row3 { display: flex; gap: 12px; align-items: flex-end; }
 .inline { display: flex; gap: 6px; }
 .check { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.check input[type=number] { width: 84px; } .check select { width: 76px; }
 details { margin-bottom: 12px; color: var(--textMuted); } summary { cursor: pointer; margin-bottom: 8px; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; } .actions.left { justify-content: flex-start; margin-bottom: 12px; }
 .err { color: var(--danger); margin: 4px 0 8px; }

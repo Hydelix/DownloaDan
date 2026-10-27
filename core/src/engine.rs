@@ -8,6 +8,7 @@
 //! The engine knows nothing about queues or the UI. It reports through an `on_update` callback and returns an
 //! `Outcome`; the manager applies both to the download list.
 
+use crate::limiter::Limiter;
 use crate::model::Segment;
 use crate::util::{
     filename_from, sanitize_filename, unique_name, with_ext, PART_EXT,
@@ -67,6 +68,7 @@ pub enum StopReason {
 pub struct Control {
     token: CancellationToken,
     reason: Arc<AtomicU8>,
+    limiter: Arc<Limiter>,
 }
 
 impl Default for Control {
@@ -77,7 +79,11 @@ impl Default for Control {
 
 impl Control {
     pub fn new() -> Self {
-        Control { token: CancellationToken::new(), reason: Arc::new(AtomicU8::new(0)) }
+        Self::with_limiter(Arc::new(Limiter::new())) // a limiter nobody has set means no limit
+    }
+    /// A control whose download shares one speed limit with every other download that uses the same limiter.
+    pub fn with_limiter(limiter: Arc<Limiter>) -> Self {
+        Control { token: CancellationToken::new(), reason: Arc::new(AtomicU8::new(0)), limiter }
     }
     pub fn stop(&self, r: StopReason) {
         // the first reason wins (a pause followed by a cancel while stopping still ends as the first)
@@ -350,6 +356,7 @@ struct Shared {
     pos: Vec<AtomicI64>,
     token: CancellationToken,
     on_update: UpdateFn,
+    limiter: Arc<Limiter>,
 }
 
 impl Shared {
@@ -426,6 +433,11 @@ async fn stream_once(sh: &Arc<Shared>, idx: usize) -> Result<(), Fail> {
             }
             Ok(None) => break,
             Ok(Some(mut chunk)) => {
+                // the speed limit: wait here before reading more, which slows this connection down
+                if sh.limiter.acquire(chunk.len(), &sh.token).await.is_err() {
+                    flush(sh, idx, &mut buf, &mut at).await?; // cancelled while waiting: keep what has arrived
+                    return Err(Fail::Aborted);
+                }
                 if end != -1 {
                     let have = at + buf.len() as i64;
                     let room = end - have + 1;
@@ -562,6 +574,7 @@ pub async fn run(client: Client, spec: JobSpec, ctl: Control, on_update: UpdateF
             pos: segs.iter().map(|s| AtomicI64::new(s.pos)).collect(),
             token: work_token.clone(),
             on_update: on_update.clone(),
+            limiter: ctl.limiter.clone(),
         });
         segments = Some(sh.snapshot());
 

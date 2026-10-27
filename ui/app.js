@@ -112,6 +112,7 @@ function renderQueues() {
   $('queueList').replaceChildren(...items);
 }
 
+function fmtLimit(kb) { return kb >= 1024 ? +(kb / 1024).toFixed(1) + ' MB/s' : kb + ' KB/s'; }
 function renderStatus() {
   const act = [...S.downloads.values()].filter((d) => d.status === 'downloading');
   setText($('stSpeed'), fmtBytes(act.reduce((a, d) => a + (d.speed || 0), 0)) + '/s');
@@ -119,6 +120,8 @@ function renderStatus() {
   const b = $('stBridge'); b.className = S.bridge.ok ? 'ok' : 'bad';
   setText(b, S.bridge.ok ? 'Browser link: port ' + (S.bridge.port || S.settings.bridgePort) : 'Browser link unavailable');
   setText($('parValue'), String(S.settings.maxSimultaneous || 3));
+  const lim = $('stLimit'); lim.className = 'stlimit' + (S.settings.speedLimitOn ? ' on' : '');
+  setText(lim, S.settings.speedLimitOn ? 'Speed limit: ' + fmtLimit(S.settings.speedLimitKbps) : 'No speed limit');
   const sel = [...S.sel].map((i) => S.downloads.get(i)).filter(Boolean);
   $('btnResume').disabled = !sel.some((d) => d.status === 'paused' || d.status === 'error');
   $('btnPause').disabled = !sel.some((d) => d.status === 'downloading' || d.status === 'queued');
@@ -475,6 +478,9 @@ $('addUrls').addEventListener('input', () => { const multi = $('addUrls').value.
 // ---------- settings ----------
 function fillSettings() {
   const s = S.settings;
+  const kb = s.speedLimitKbps || 1024, inMb = kb >= 1024 && kb % 1024 === 0;
+  if (document.activeElement !== $('setLimit')) { $('setLimit').value = inMb ? kb / 1024 : kb; $('setLimitUnit').value = inMb ? '1024' : '1'; }
+  $('setLimitOn').checked = !!s.speedLimitOn;
   $('setConn').value = s.connections; $('setDir').value = s.downloadDir; $('setTray').checked = s.minimizeToTray;
   $('setStartup').checked = s.runAtStartup; $('setNotify').checked = s.notify; $('setPrune').checked = s.removeMissing; $('setAutoUpdate').checked = s.autoUpdate; renderKey(); $('setToken').value = S.token;
   if (document.activeElement !== $('setPort')) $('setPort').value = s.bridgePort;
@@ -487,6 +493,10 @@ $('setTabs').addEventListener('click', (e) => {
   [...$('setTabs').children].forEach((x) => x.classList.toggle('active', x === b));
   document.querySelectorAll('#dlgSettings [data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== b.dataset.p; });
 });
+const applyLimit = () => api.setSettings({ speedLimitKbps: Math.max(1, Math.round(+$('setLimit').value || 1)) * +$('setLimitUnit').value });
+$('setLimit').onchange = applyLimit; $('setLimitUnit').onchange = applyLimit;
+$('setLimitOn').onchange = (e) => api.setSettings({ speedLimitOn: e.target.checked });
+$('stLimit').onclick = () => api.setSettings({ speedLimitOn: !S.settings.speedLimitOn });
 $('setConn').onchange = (e) => api.setSettings({ connections: +e.target.value });
 $('setPort').onchange = (e) => api.setSettings({ bridgePort: +e.target.value });
 $('setTray').onchange = (e) => api.setSettings({ minimizeToTray: e.target.checked });

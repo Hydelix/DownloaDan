@@ -72,6 +72,9 @@ pub struct Settings {
     pub bypass_key: String,
     pub bypass_key_v: i64,
     pub bridge_port: i64,
+    /// Cap the total download speed of all downloads together.
+    pub speed_limit_on: bool,
+    pub speed_limit_kbps: i64,
 }
 
 impl Default for Settings {
@@ -88,6 +91,8 @@ impl Default for Settings {
             bypass_key: "F8".into(),
             bypass_key_v: 3,
             bridge_port: 18642,
+            speed_limit_on: false,
+            speed_limit_kbps: 1024,
         }
     }
 }

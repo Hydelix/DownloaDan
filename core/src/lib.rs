@@ -4,6 +4,7 @@
 pub mod api;
 pub mod bridge;
 pub mod engine;
+pub mod limiter;
 pub mod manager;
 pub mod model;
 pub mod theme;

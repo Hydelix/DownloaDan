@@ -65,7 +65,7 @@
     </div>
 
     <footer class="statusbar">
-      <span id="stSpeed">0 B/s</span><span id="stCount">0 active</span><span class="spacer"></span><span id="stBridge"></span>
+      <span id="stSpeed">0 B/s</span><span id="stCount">0 active</span><button id="stLimit" class="stlimit" type="button" title="Click to turn the speed limit on or off"></button><span class="spacer"></span><span id="stBridge"></span>
     </footer>
   </main>
 </div>
@@ -142,6 +142,8 @@
       <label class="field"><span>Connections per download</span><input id="setConn" type="number" min="1" max="16"></label>
       <label class="field"><span>Default save folder</span><div class="inline"><input id="setDir" type="text" readonly><button id="setBrowse" class="btn" type="button">Browse…</button></div></label>
     </div>
+    <div class="check"><input id="setLimitOn" type="checkbox"><label for="setLimitOn">Limit total download speed to</label>
+      <input id="setLimit" type="number" min="1" step="1"><select id="setLimitUnit"><option value="1">KB/s</option><option value="1024">MB/s</option></select></div>
     <label class="check"><input id="setTray" type="checkbox"> Keep running in the tray when the window is closed <i class="muted">(frees UI memory)</i></label>
     <label class="check"><input id="setStartup" type="checkbox"> Start with Windows (minimized to tray)</label>
     <label class="check"><input id="setNotify" type="checkbox"> Notify when a download completes</label>

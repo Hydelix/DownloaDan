@@ -4,6 +4,7 @@
 //! emitted after the lock is released, so a listener can safely call back into the manager.
 
 use crate::engine::{self, Control, JobSpec, Outcome, Resume, StopReason, Update};
+use crate::limiter::Limiter;
 use crate::model::*;
 use crate::theme;
 use crate::util::{clean_name, fmt_bytes, new_id, new_token, now_ms, sanitize_filename, same_name, PART_EXT};
@@ -106,6 +107,7 @@ pub struct Manager {
     events: EventFn,
     trash: Mutex<TrashFn>,
     save_wake: Notify,
+    limiter: Arc<Limiter>,
 }
 
 fn clamp_int(v: &Value, lo: i64, hi: i64, default: i64) -> i64 {
@@ -151,7 +153,9 @@ impl Manager {
             events,
             trash: Mutex::new(Arc::new(|p: &Path| std::fs::remove_file(p).map_err(|e| e.to_string()))),
             save_wake: Notify::new(),
+            limiter: Arc::new(Limiter::new()),
         });
+        m.apply_limit();
         m.save(); // write the tidied state (and a new pairing token on first run) right away, not only after the first change
         let saver = m.clone();
         rt.spawn(async move {
@@ -664,6 +668,9 @@ impl Manager {
             if let Some(v) = o.get("connections") {
                 s.connections = clamp_int(v, 1, 16, s.connections);
             }
+            if let Some(v) = o.get("speedLimitKbps") {
+                s.speed_limit_kbps = clamp_int(v, 10, 10_000_000, s.speed_limit_kbps);
+            }
             if let Some(v) = o.get("bridgePort") {
                 s.bridge_port = clamp_int(v, 1024, 65535, s.bridge_port);
             }
@@ -683,14 +690,38 @@ impl Manager {
                 ("notify", &mut s.notify),
                 ("removeMissing", &mut s.remove_missing),
                 ("autoUpdate", &mut s.auto_update),
+                ("speedLimitOn", &mut s.speed_limit_on),
             ] {
                 if let Some(b) = o.get(k).and_then(Value::as_bool) {
                     *slot = b;
                 }
             }
         }
+        self.apply_limit();
         self.meta_changed();
         self.schedule();
+    }
+
+    /// Hand the speed limit from the settings to the engine. Running downloads feel it straight away.
+    fn apply_limit(&self) {
+        let s = self.inner.lock().state.settings.clone();
+        let bytes_per_sec = if s.speed_limit_on { s.speed_limit_kbps.max(1) as u64 * 1024 } else { 0 };
+        if self.limiter.get() != bytes_per_sec {
+            self.limiter.set(bytes_per_sec);
+        }
+    }
+
+    /// Switch the speed limit on or off (the tray menu uses this). Returns whether it is now on.
+    pub fn toggle_speed_limit(self: &Arc<Self>) -> bool {
+        let on = {
+            let mut g = self.inner.lock();
+            let s = &mut g.state.settings;
+            s.speed_limit_on = !s.speed_limit_on;
+            s.speed_limit_on
+        };
+        self.apply_limit();
+        self.meta_changed();
+        on
     }
 
     pub fn regenerate_token(&self) -> String {
@@ -843,7 +874,7 @@ impl Manager {
                     connections,
                     resume,
                 };
-                let ctl = Control::new();
+                let ctl = Control::with_limiter(self.limiter.clone());
                 let (tx, rx) = watch::channel(false);
                 g.tasks.insert(id.clone(), Running { ctl: ctl.clone(), done: rx, last_save: 0 });
                 started.push(id.clone());
@@ -1027,6 +1058,7 @@ fn normalise(state: &mut State, default_dir: &str) {
     }
     s.max_simultaneous = s.max_simultaneous.clamp(1, 10);
     s.connections = s.connections.clamp(1, 16);
+    s.speed_limit_kbps = s.speed_limit_kbps.clamp(10, 10_000_000);
     s.bridge_port = s.bridge_port.clamp(1024, 65535);
     if !key_ok(&s.bypass_key) {
         s.bypass_key = "F8".into();
